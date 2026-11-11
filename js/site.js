@@ -112,6 +112,7 @@
             bouton.disabled = false;
             if (ok) {
               ecrireMemoire(MEMOIRE, "1");
+              notifierConnexion();
               document.documentElement.classList.remove("ferme");
               porte.parentNode.removeChild(porte);
               var marque = document.querySelector(".marque");
@@ -143,6 +144,148 @@
         champ.focus();
       })();
     }
+  }
+
+  /* ---------- notification de connexion (Telegram) ----------
+     Quelqu'un entre le bon code → un message part vers votre téléphone :
+     appareil, horaire, page d'entrée, réseau (type + opérateur/ville).
+     Configuration : HEBERGEMENT.md § « Notification de connexion ».
+
+     ATTENTION : le jeton et l'identifiant de discussion sont lus par le
+     navigateur, donc visibles dans le code du site (dépôt public). Un
+     curieux peut envoyer un faux message dans VOTRE discussion ; il ne
+     peut ni lire vos messages ni accéder à votre compte Telegram.
+     En cas d'abus : @BotFather → /revoke pour régénérer le jeton.
+
+     Champs vides = notification coupée : le site reste entièrement
+     fonctionnel, sans aucune requête réseau. */
+  var TELEGRAM_TOKEN = "9186294708:AAEVUYpS3IEibK7xzAW2S2EHu1dpdjhH1o4";
+  var TELEGRAM_CHAT = "7154433047";
+
+  function appareilLisible() {
+    var ua = navigator.userAgent || "";
+    var os = "Système inconnu";
+    if (/iPhone/.test(ua)) { os = "iPhone"; }
+    else if (/iPad/.test(ua)) { os = "iPad"; }
+    else if (/Android/.test(ua)) { os = "Android"; }
+    else if (/CrOS/.test(ua)) { os = "ChromeOS"; }
+    else if (/Windows/.test(ua)) { os = "Windows"; }
+    else if (/Mac OS X/.test(ua)) { os = "Mac"; }
+    else if (/Linux/.test(ua)) { os = "Linux"; }
+
+    var nav = "Navigateur inconnu";
+    if (/Edg\//.test(ua)) { nav = "Edge"; }
+    else if (/OPR\//.test(ua) || /Opera/.test(ua)) { nav = "Opera"; }
+    else if (/Firefox\//.test(ua)) { nav = "Firefox"; }
+    else if (/Chrome\//.test(ua)) { nav = "Chrome"; }
+    else if (/Safari\//.test(ua)) { nav = "Safari"; }
+
+    var forme = "ordinateur";
+    if (/iPhone/.test(ua) || /Android[^;]*;.*Mobile/.test(ua)) {
+      forme = "téléphone";
+    } else if (/iPad/.test(ua) || /Tablet/.test(ua) || /Android/.test(ua)) {
+      forme = "tablette";
+    }
+    return os + " · " + nav + " (" + forme + ")";
+  }
+
+  function horaireLisible() {
+    var d = new Date();
+    var texte;
+    try {
+      texte = d.toLocaleString("fr-FR", { dateStyle: "full", timeStyle: "short" });
+    } catch (e) {
+      texte = d.toLocaleString("fr-FR");
+    }
+    var fuseau = "";
+    try {
+      fuseau = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    } catch (e2) { /* ignore */ }
+    return texte + (fuseau ? " — " + fuseau : "");
+  }
+
+  function pageEntree() {
+    if (location.protocol === "file:") { return "fichier local (hors ligne)"; }
+    var morceaux = (location.pathname || "/").split("/")
+      .filter(function (m) { return m && m !== "index.html"; });
+    if (morceaux[0] === "manech-dessin-et-peinture") { morceaux.shift(); }
+    return morceaux.length ? morceaux.join("/") : "accueil";
+  }
+
+  function reseauLisible() {
+    var c = navigator.connection || navigator.mozConnection ||
+            navigator.webkitConnection;
+    if (!c) { return ""; }
+    var noms = {
+      wifi: "Wi-Fi", cellular: "réseau mobile", ethernet: "câble Ethernet",
+      wimax: "WiMAX", bluetooth: "Bluetooth", none: "hors ligne"
+    };
+    if (c.type && noms[c.type]) { return noms[c.type]; }
+    if (c.effectiveType) {
+      return "connexion " + String(c.effectiveType).toUpperCase();
+    }
+    return "";
+  }
+
+  /* Localisation approximative déduite de l'adresse IP (ville, pays,
+     opérateur). Service gratuit, sans clé, CORS ouvert. En cas d'échec
+     (hors ligne, bloqué…), le message part simplement sans cette ligne. */
+  function reseauDepuisIp() {
+    if (typeof fetch !== "function") { return Promise.resolve(""); }
+    var ctrl = null;
+    if (typeof AbortController === "function") { ctrl = new AbortController(); }
+    var minuteur = window.setTimeout(function () {
+      if (ctrl) { ctrl.abort(); }
+    }, 4000);
+    return fetch("https://ipwho.is/", ctrl ? { signal: ctrl.signal } : {})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var lieu = [d.city, d.country].filter(function (x) { return !!x; })
+          .join(", ");
+        var operateur = (d.connection &&
+          (d.connection.isp || d.connection.org)) || "";
+        return [lieu, operateur].filter(function (x) { return !!x; })
+          .join(" — ");
+      })
+      .catch(function () { return ""; })
+      .then(function (v) { window.clearTimeout(minuteur); return v; });
+  }
+
+  /* Envoi : une seule fois par déverrouillage, en tâche de fond, jamais
+     bloquant et jamais d'erreur remontée — si le réseau manque, le site
+     fonctionne normalement et la notification est simplement perdue. */
+  function notifierConnexion() {
+    if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT) { return; }
+    if (typeof fetch !== "function") { return; }
+    try { if (navigator.onLine === false) { return; } } catch (e) { /* ok */ }
+    try {
+      if (window.sessionStorage.getItem("manech-notifie") === "1") { return; }
+      window.sessionStorage.setItem("manech-notifie", "1");
+    } catch (e2) { /* stockage indisponible : on continue */ }
+
+    var type = reseauLisible();
+    reseauDepuisIp().then(function (lieu) {
+      var lignes = [
+        "Manech — nouvelle connexion",
+        "Appareil : " + appareilLisible(),
+        "Horaire : " + horaireLisible(),
+        "Page : " + pageEntree()
+      ];
+      var reseau = [type, lieu].filter(function (x) { return !!x; })
+        .join(" · ");
+      if (reseau) { lignes.push("Réseau : " + reseau); }
+      return fetch(
+        "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_CHAT,
+            text: lignes.join("\n"),
+            disable_web_page_preview: true
+          })
+        });
+    }).catch(function () { /* silencieux */ });
   }
 
   function normal(s) {
