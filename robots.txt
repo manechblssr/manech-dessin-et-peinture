@@ -1,0 +1,4 @@
+# Manech — dessin et peinture
+# Site privé derrière un code d'accès : exclu des moteurs de recherche.
+User-agent: *
+Disallow: /
