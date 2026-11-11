@@ -222,7 +222,9 @@
     };
     if (c.type && noms[c.type]) { return noms[c.type]; }
     if (c.effectiveType) {
-      return "connexion " + String(c.effectiveType).toUpperCase();
+      /* effort : simple estimation de débit par le navigateur (elle peut
+         indiquer « 4g » même sur du Wi-Fi) — libellé assumé comme tel */
+      return "débit estimé " + String(c.effectiveType).toUpperCase();
     }
     return "";
   }
