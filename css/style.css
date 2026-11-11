@@ -273,34 +273,80 @@ main {
   border-bottom-color: var(--accent);
 }
 
-.tri {
+/* --- tri : menu déroulant maison (papier / encre / filet) --- */
+
+.tri { position: relative; }
+
+.tri-bouton {
   font-family: var(--sans);
   font-size: 14px;
-  background-color: var(--surface);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='11' height='7'><path d='M1 1.5l4.5 4 4.5-4' fill='none' stroke='%236B6B67' stroke-width='1.4'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
   border: 1px solid var(--rule-2);
   color: var(--ink);
-  padding: 8px 32px 8px 10px;
+  padding: 8px 10px;
   border-radius: 0;
   box-shadow: none;
   cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
 }
 
-.tri:hover { border-color: var(--ink-2); }
+.tri-bouton:hover { border-color: var(--ink-2); }
 
-.tri:focus {
-  outline: none;
-  border-color: var(--accent);
+.tri-bouton:focus { outline: none; border-color: var(--accent); }
+
+.tri-fleche {
+  width: 11px;
+  height: 7px;
+  flex: none;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='11' height='7'><path d='M1 1.5l4.5 4 4.5-4' fill='none' stroke='%236B6B67' stroke-width='1.4'/></svg>") no-repeat center;
+  transition: transform 180ms var(--courbe);
 }
 
-.tri option {
+.tri-bouton[aria-expanded="true"] .tri-fleche { transform: rotate(180deg); }
+
+.tri-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: max(100%, 210px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
   background: var(--surface);
-  color: var(--ink);
+  border: 1px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--rule);
 }
+
+.tri-menu[hidden] { display: none; }
+
+.tri-menu:not([hidden]) { animation: triApparait 160ms var(--courbe); }
+
+@keyframes triApparait {
+  from { opacity: 0; transform: translateY(-4px); }
+}
+
+.tri-option {
+  font-family: var(--sans);
+  font-size: 14px;
+  padding: 10px 14px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  border-top: 1px solid var(--rule);
+  transition: background-color 120ms var(--courbe);
+}
+
+.tri-option:first-child { border-top: 0; }
+
+.tri-option:hover,
+.tri-option:focus { background: var(--paper); }
+
+.tri-option:focus { outline-offset: -2px; }
+
+.tri-option[aria-selected="true"] { color: var(--accent); }
 
 .compte {
   margin-left: auto;
@@ -752,4 +798,124 @@ body.verrouillee { overflow: hidden; }
 
   .pistes { scroll-behavior: auto; }
   .vignette>a:hover img { transform: none; }
+}
+
+/* ---------- porte d'accès ---------- */
+
+html.ferme { overflow: hidden; }
+
+html.ferme .site { display: none; }
+
+.porte { display: none; }
+
+html.ferme .porte {
+  display: grid;
+  place-items: center;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--paper);
+  padding: var(--marge);
+}
+
+.porte-fiche {
+  width: min(420px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  padding: clamp(28px, 6vw, 44px);
+}
+
+.porte-surtitre {
+  margin: 0 0 10px;
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.porte-titre {
+  margin: 0 0 14px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(28px, 5vw, 34px);
+  line-height: 1.1;
+}
+
+.porte-note {
+  margin: 0 0 26px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.porte-etiquette {
+  display: block;
+  margin-bottom: 8px;
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.porte-champ {
+  width: 100%;
+  font-family: var(--sans);
+  font-size: 22px;
+  letter-spacing: 0.4em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule-2);
+  border-radius: 0;
+  padding: 12px 14px;
+  appearance: none;
+}
+
+.porte-champ:hover { border-color: var(--ink-2); }
+
+.porte-champ:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.porte-champ[aria-invalid="true"] { border-color: var(--accent); }
+
+.porte-erreur {
+  margin: 10px 0 0;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--accent);
+}
+
+.porte-erreur[hidden] { display: none; }
+
+.porte-bouton {
+  margin-top: 22px;
+  width: 100%;
+  font-family: var(--sans);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 13px 16px;
+  cursor: pointer;
+  transition: background-color 160ms var(--courbe),
+              border-color 160ms var(--courbe);
+}
+
+.porte-bouton:hover { background: var(--accent); border-color: var(--accent); }
+
+.porte-bouton:disabled { opacity: 0.5; cursor: default; }
+
+.porte-noscript {
+  margin: 18px 0 0;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--accent);
 }

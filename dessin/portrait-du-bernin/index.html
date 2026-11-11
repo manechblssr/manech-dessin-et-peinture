@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="ferme">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>try{if((sessionStorage.getItem("manech-acces")||localStorage.getItem("manech-acces"))==="1")document.documentElement.classList.remove("ferme")}catch(e){try{if(localStorage.getItem("manech-acces")==="1")document.documentElement.classList.remove("ferme")}catch(e2){}}</script>
 <title>Portrait du Bernin — Manech — dessin et peinture</title>
 <meta name="description" content="Portrait du Bernin — mai 2026 — Crayons de bois. Dessin de Manech.">
 <meta name="color-scheme" content="light">
@@ -16,6 +17,7 @@
 <link rel="stylesheet" href="../../css/style.css">
 </head>
 <body>
+<div class="site">
 <header class="entete">
   <div class="interieur">
     <a class="marque" href="../../index.html">Manech<span class="sous">dessin et peinture</span></a>
@@ -56,6 +58,24 @@
     <span>75 œuvres</span>
   </div>
 </footer>
+</div>
+<div class="porte" id="porte" role="dialog" aria-modal="true" aria-labelledby="porte-titre">
+  <div class="porte-fiche">
+    <p class="porte-surtitre">Accès</p>
+    <h1 class="porte-titre" id="porte-titre">Porte d’accès</h1>
+    <p class="porte-note">Ce portfolio est réservé. Saisissez le code à six chiffres.</p>
+    <form class="porte-form" novalidate>
+      <label class="porte-etiquette" for="porte-code">Code</label>
+      <input class="porte-champ" id="porte-code" name="code" type="password"
+             inputmode="numeric" autocomplete="off" maxlength="6"
+             pattern="[0-9]{6}" spellcheck="false"
+             aria-describedby="porte-erreur">
+      <p class="porte-erreur" id="porte-erreur" role="alert" hidden></p>
+      <button class="porte-bouton" type="submit">Entrer</button>
+    </form>
+    <noscript><p class="porte-noscript">JavaScript est requis pour déverrouiller ce site.</p></noscript>
+  </div>
+</div>
 <script src="../../js/site.js" defer></script>
 </body>
 </html>

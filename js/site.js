@@ -8,6 +8,143 @@
 
   var reduit = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  /* ---------- porte d'accès (PBKDF2-SHA256 via WebCrypto) ----------
+     Le code en clair n'existe dans aucun fichier : on ne stocke qu'un
+     hachage dérivé (SEL + nombre d'itérations + clé attendue).
+     Voir tools/code_acces.py pour régénérer une clé. */
+  var MEMOIRE = "manech-acces";
+  var SEL = "4d616e6563682d706f7274652d61636365732d323032362d7631";
+  var ITER = 600000;
+  var CLE = "f5e017b51bcb258373e4a3fd3bf4ed7bc9bfb840135b22a7b0d0eae0a3914a5d";
+
+  function lireMemoire(cle) {
+    try {
+      var v = sessionStorage.getItem(cle);
+      if (v !== null) { return v; }
+    } catch (e1) { /* ignore */ }
+    try { return localStorage.getItem(cle); } catch (e2) { return null; }
+  }
+
+  function ecrireMemoire(cle, valeur) {
+    try { sessionStorage.setItem(cle, valeur); return; } catch (e1) { /* ignore */ }
+    try { localStorage.setItem(cle, valeur); } catch (e2) { /* ignore */ }
+  }
+
+  function octets(hex) {
+    var n = hex.length / 2;
+    var t = new Uint8Array(n);
+    for (var i = 0; i < n; i++) { t[i] = parseInt(hex.substr(i * 2, 2), 16); }
+    return t;
+  }
+
+  function memeChose(a, b) {
+    if (a.length !== b.length) { return false; }
+    var d = 0;
+    for (var i = 0; i < a.length; i++) { d |= a.charCodeAt(i) ^ b.charCodeAt(i); }
+    return d === 0;
+  }
+
+  function verifierCode(code) {
+    if (!window.crypto || !crypto.subtle) {
+      return Promise.reject(new Error("webcrypto-indisponible"));
+    }
+    return crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(code), "PBKDF2", false, ["deriveBits"]
+    ).then(function (cle) {
+      return crypto.subtle.deriveBits(
+        { name: "PBKDF2", salt: octets(SEL), iterations: ITER, hash: "SHA-256" },
+        cle, 256);
+    }).then(function (bits) {
+      var v = "";
+      var o = new Uint8Array(bits);
+      for (var i = 0; i < o.length; i++) {
+        v += ("0" + o[i].toString(16)).slice(-2);
+      }
+      return memeChose(v, CLE);
+    });
+  }
+
+  var porte = document.getElementById("porte");
+  if (porte) {
+    if (lireMemoire(MEMOIRE) === "1") {
+      document.documentElement.classList.remove("ferme");
+      porte.parentNode.removeChild(porte);
+      porte = null;
+    } else {
+      (function () {
+        var formulaire = porte.querySelector(".porte-form");
+        var champ = porte.querySelector(".porte-champ");
+        var erreur = porte.querySelector(".porte-erreur");
+        var bouton = porte.querySelector(".porte-bouton");
+        var tentatives = 0;
+        var blocage = 0;
+
+        var dire = function (texte) {
+          erreur.textContent = texte;
+          erreur.hidden = false;
+          champ.setAttribute("aria-invalid", "true");
+        };
+
+        var nettoyer = function () {
+          erreur.hidden = true;
+          erreur.textContent = "";
+          champ.removeAttribute("aria-invalid");
+        };
+
+        champ.addEventListener("input", function () {
+          var propre = champ.value.replace(/\D/g, "").slice(0, 6);
+          if (propre !== champ.value) { champ.value = propre; }
+          if (!erreur.hidden) { nettoyer(); }
+        });
+
+        formulaire.addEventListener("submit", function (e) {
+          e.preventDefault();
+          if (Date.now() < blocage) { return; }
+          var code = champ.value.replace(/\D/g, "");
+          if (code.length !== 6) {
+            dire("Le code comporte six chiffres.");
+            champ.focus();
+            return;
+          }
+          nettoyer();
+          bouton.disabled = true;
+          verifierCode(code).then(function (ok) {
+            bouton.disabled = false;
+            if (ok) {
+              ecrireMemoire(MEMOIRE, "1");
+              document.documentElement.classList.remove("ferme");
+              porte.parentNode.removeChild(porte);
+              var marque = document.querySelector(".marque");
+              if (marque) { marque.focus(); }
+              return;
+            }
+            tentatives += 1;
+            champ.value = "";
+            champ.focus();
+            if (tentatives >= 3) {
+              var secondes = Math.min(2 + (tentatives - 3) * 2, 10);
+              blocage = Date.now() + secondes * 1000;
+              bouton.disabled = true;
+              dire("Code incorrect. Réessayez dans " + secondes + " s.");
+              window.setTimeout(function () {
+                bouton.disabled = false;
+                nettoyer();
+                champ.focus();
+              }, secondes * 1000);
+            } else {
+              dire("Code incorrect.");
+            }
+          }).catch(function () {
+            bouton.disabled = false;
+            dire("Vérification impossible : WebCrypto indisponible.");
+          });
+        });
+
+        champ.focus();
+      })();
+    }
+  }
+
   function normal(s) {
     return (s || "").toLowerCase().normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
@@ -255,6 +392,7 @@
 
   /* ---------- clavier ---------- */
   document.addEventListener("keydown", function (e) {
+    if (document.documentElement.classList.contains("ferme")) { return; }
     if (lbOuverte) {
       if (e.key === "Escape") { e.preventDefault(); lbFermerFn(); }
       else if (e.key === "ArrowRight") {
@@ -284,6 +422,7 @@
       galerie.querySelectorAll(".vignette"));
     var recherche = document.querySelector("[data-recherche]");
     var tri = document.querySelector("[data-tri]");
+    var triOrdre = "recent";
     var compte = document.querySelector("[data-compte]");
     var vide = document.querySelector("[data-vide]");
     var etat = { serie: "", technique: "", annee: "" };
@@ -311,7 +450,7 @@
     };
 
     var appliquer = function () {
-      var ordre = tri ? tri.value : "recent";
+      var ordre = triOrdre;
       var liste = items.slice().sort(function (a, b) {
         if (ordre === "titre") {
           return a.getAttribute("data-titre")
@@ -357,7 +496,100 @@
     if (recherche) {
       recherche.addEventListener("input", appliquer);
     }
-    if (tri) { tri.addEventListener("change", appliquer); }
+    /* --- tri : liste déroulante maison (role=listbox, focus dans le menu) --- */
+    if (tri) {
+      (function () {
+        var boutonTri = tri.querySelector("[data-tri-bouton]");
+        var menuTri = tri.querySelector("[data-tri-menu]");
+        var valeurTri = tri.querySelector("[data-tri-valeur]");
+        var optionsTri = Array.prototype.slice.call(
+          tri.querySelectorAll("[role=option]"));
+
+        var optionActive = function () {
+          var act = document.activeElement;
+          return optionsTri.indexOf(act) !== -1 ? act : null;
+        };
+
+        var focusOption = function (opt) {
+          if (!opt) { return; }
+          try { opt.focus({ preventScroll: true }); } catch (e) { opt.focus(); }
+        };
+
+        var fermerTri = function (rendreFocus) {
+          menuTri.hidden = true;
+          boutonTri.setAttribute("aria-expanded", "false");
+          if (rendreFocus) { boutonTri.focus(); }
+        };
+
+        var ouvrirTri = function () {
+          menuTri.hidden = false;
+          boutonTri.setAttribute("aria-expanded", "true");
+          var cible = null;
+          optionsTri.forEach(function (opt) {
+            if (opt.getAttribute("aria-selected") === "true") { cible = opt; }
+          });
+          focusOption(cible || optionsTri[0]);
+        };
+
+        var choisirTri = function (opt) {
+          triOrdre = opt.getAttribute("data-valeur");
+          optionsTri.forEach(function (autre) {
+            autre.setAttribute("aria-selected",
+                               autre === opt ? "true" : "false");
+          });
+          valeurTri.textContent = opt.textContent;
+          fermerTri(true);
+          appliquer();
+        };
+
+        boutonTri.addEventListener("click", function () {
+          if (menuTri.hidden) { ouvrirTri(); } else { fermerTri(false); }
+        });
+
+        boutonTri.addEventListener("keydown", function (e) {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            ouvrirTri();
+          }
+        });
+
+        menuTri.addEventListener("keydown", function (e) {
+          var act = optionActive();
+          if (!act) { return; }
+          var i = optionsTri.indexOf(act);
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            focusOption(optionsTri[(i + 1) % optionsTri.length]);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            focusOption(optionsTri[(i + optionsTri.length - 1) %
+                                   optionsTri.length]);
+          } else if (e.key === "Home") {
+            e.preventDefault();
+            focusOption(optionsTri[0]);
+          } else if (e.key === "End") {
+            e.preventDefault();
+            focusOption(optionsTri[optionsTri.length - 1]);
+          } else if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            choisirTri(act);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            fermerTri(true);
+          } else if (e.key === "Tab") {
+            fermerTri(true);
+          }
+        });
+
+        optionsTri.forEach(function (opt) {
+          opt.addEventListener("click", function () { choisirTri(opt); });
+        });
+
+        document.addEventListener("click", function (e) {
+          if (!menuTri.hidden && !tri.contains(e.target)) { fermerTri(false); }
+        });
+      })();
+    }
     appliquer();
   }
 })();
