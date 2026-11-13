@@ -146,10 +146,6 @@
     }
   }
 
-  /* Variante publique (manech-galerie) : sans porte, la notification part
-     à la première visite de l'onglet — une fois par session. */
-  if (NOTIF_SANS_PORTE) { notifierConnexion(); }
-
   /* ---------- notification de connexion (Telegram) ----------
      Quelqu'un entre le bon code → un message part vers votre téléphone :
      appareil, horaire, page d'entrée, réseau (type + opérateur/ville).
@@ -316,6 +312,11 @@
         });
     }).catch(function () { /* silencieux */ });
   }
+
+  /* Variante publique (manech-galerie) : sans porte, la notification part
+     à la première visite de l'onglet — une fois par session. Placé APRÈS
+     l'assignation de NOTIF_SANS_PORTE (les var s'exécutent en ordre). */
+  if (NOTIF_SANS_PORTE) { notifierConnexion(); }
 
   function normal(s) {
     return (s || "").toLowerCase().normalize("NFD")
