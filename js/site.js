@@ -146,6 +146,10 @@
     }
   }
 
+  /* Variante publique (manech-galerie) : sans porte, la notification part
+     à la première visite de l'onglet — une fois par session. */
+  if (NOTIF_SANS_PORTE) { notifierConnexion(); }
+
   /* ---------- notification de connexion (Telegram) ----------
      Quelqu'un entre le bon code → un message part vers votre téléphone :
      appareil, horaire, page d'entrée, réseau (type + opérateur/ville).
@@ -161,6 +165,11 @@
      fonctionnel, sans aucune requête réseau. */
   var TELEGRAM_TOKEN = "9186294708:AAEVUYpS3IEibK7xzAW2S2EHu1dpdjhH1o4";
   var TELEGRAM_CHAT = "7154433047";
+  /* Variante « manech-galerie » (site public) : tools/build.py --sans-porte
+     remplace les deux valeurs ci-dessous — le message est alors préfixé
+     « PUBLIC » et part à la visite (il n'y a plus de porte). */
+  var NOTIF_PREFIXE = "";
+  var NOTIF_SANS_PORTE = false;
 
   function appareilLisible() {
     var ua = navigator.userAgent || "";
@@ -208,7 +217,7 @@
     if (location.protocol === "file:") { return "fichier local (hors ligne)"; }
     var morceaux = (location.pathname || "/").split("/")
       .filter(function (m) { return m && m !== "index.html"; });
-    if (morceaux[0] === "manech-dessin-et-peinture") { morceaux.shift(); }
+    if (/^manech-/.test(morceaux[0] || "")) { morceaux.shift(); }
     return morceaux.length ? morceaux.join("/") : "accueil";
   }
 
@@ -253,22 +262,40 @@
       .then(function (v) { window.clearTimeout(minuteur); return v; });
   }
 
+  /* Robots d'indexation et d'outillage : jamais de notification pour eux
+     (sinon le site public partirait en spam à chaque crawl). */
+  function estRobot() {
+    var ua = navigator.userAgent || "";
+    return /(googlebot|google-extended|googleother|bingbot|bingpreview|yandexbot|baiduspider|duckduckbot|applebot|slurp|crawler|spider|lighthouse|headless|phantomjs|facebookexternalhit|facebot|ia_archiver|ahrefsbot|semrushbot|mj12bot|petalbot|bytespider|gptbot|claudebot|ccbot|perplexitybot|amazonbot|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|uptimerobot|pingdom|python-requests|curl\/|wget\/|libwww|scrapy)/i.test(ua);
+  }
+
   /* Envoi : une seule fois par déverrouillage, en tâche de fond, jamais
      bloquant et jamais d'erreur remontée — si le réseau manque, le site
      fonctionne normalement et la notification est simplement perdue. */
   function notifierConnexion() {
     if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT) { return; }
+    if (estRobot()) { return; }
     if (typeof fetch !== "function") { return; }
     try { if (navigator.onLine === false) { return; } } catch (e) { /* ok */ }
     try {
       if (window.sessionStorage.getItem("manech-notifie") === "1") { return; }
       window.sessionStorage.setItem("manech-notifie", "1");
     } catch (e2) { /* stockage indisponible : on continue */ }
+    if (NOTIF_SANS_PORTE) {
+      /* Site public : anti-spam — un même navigateur ne prévient qu'une
+         fois toutes les 10 minutes (au-delà d'une visite par onglet). */
+      try {
+        var cleLe = "manech-notifie-le";
+        var dernier = Number(window.localStorage.getItem(cleLe) || 0);
+        if (dernier && Date.now() - dernier < 600000) { return; }
+        window.localStorage.setItem(cleLe, String(Date.now()));
+      } catch (e3) { /* stockage indisponible : on continue */ }
+    }
 
     var type = reseauLisible();
     reseauDepuisIp().then(function (lieu) {
       var lignes = [
-        "Manech — nouvelle connexion",
+        (NOTIF_PREFIXE || "Manech") + " — nouvelle connexion",
         "Appareil : " + appareilLisible(),
         "Horaire : " + horaireLisible(),
         "Page : " + pageEntree()
